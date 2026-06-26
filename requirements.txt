@@ -1,0 +1,3 @@
+# The canonical dependency list lives under backend/.
+# Install with:  pip install -r backend/requirements.txt
+-r backend/requirements.txt

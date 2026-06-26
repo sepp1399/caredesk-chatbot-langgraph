@@ -1,0 +1,1595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ospedale Salus — Chat</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --wa-green-dark:    #008069;   /* header */
+      --wa-green-darker:  #00604d;   /* hover */
+      --wa-green-light:   #d9fdd3;   /* outgoing bubble */
+      --wa-bg:            #efeae2;   /* chat background */
+      --wa-bg-pattern:    #d8d2c8;   /* wallpaper accent dots */
+      --wa-card:          #ffffff;   /* incoming bubble */
+      --wa-text:          #111b21;   /* body text */
+      --wa-text-muted:    #667781;   /* timestamps, status */
+      --wa-tick-blue:     #53bdeb;   /* read receipts */
+      --wa-footer:        #f0f2f5;
+      --wa-divider:       #e9edef;
+      --wa-error:         #b91c1c;
+      --wa-error-bg:      #fff0f0;
+    }
+
+    html, body { height: 100%; }
+
+    body {
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: #d1d7db;
+      color: var(--wa-text);
+      display: flex;
+      justify-content: center;
+      align-items: stretch;
+      min-height: 100vh;
+    }
+
+    /* ── Layout ─────────────────────────────────────────────────────────── */
+    #container {
+      display: flex;
+      height: 100vh;
+      width: 640px;
+      transition: width 0.25s ease;
+      box-shadow: 0 0 40px rgba(0,0,0,0.18);
+      background: var(--wa-bg);
+    }
+    #container.debug-open { width: 1180px; }
+
+    /* ── WhatsApp chat pane ─────────────────────────────────────────────── */
+    #chat-pane {
+      width: 640px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    /* ── Header ─────────────────────────────────────────────────────────── */
+    .wa-header {
+      background: var(--wa-green-dark);
+      color: #fff;
+      padding: 0.65rem 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-shrink: 0;
+      box-shadow: 0 1px 1px rgba(0,0,0,0.08);
+    }
+    .wa-avatar {
+      width: 40px; height: 40px;
+      border-radius: 50%;
+      background: #25d366;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 1.1rem;
+      flex-shrink: 0;
+      box-shadow: inset 0 0 0 2px rgba(255,255,255,0.15);
+    }
+    .wa-header-info { flex: 1; min-width: 0; }
+    .wa-header-name {
+      font-weight: 600; font-size: 1.02rem;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .wa-header-status {
+      font-size: 0.75rem; opacity: 0.85; margin-top: 1px;
+      display: flex; align-items: center; gap: 0.4rem;
+    }
+    .wa-header-status .dot-online {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: #4ade80; box-shadow: 0 0 4px #4ade80;
+    }
+    .wa-header-actions { display: flex; gap: 0.3rem; flex-shrink: 0; }
+    .wa-header-actions button {
+      width: 36px; height: 36px;
+      background: transparent; border: none;
+      color: rgba(255,255,255,0.92);
+      font-size: 1rem; cursor: pointer; border-radius: 50%;
+      display: inline-flex; align-items: center; justify-content: center;
+      transition: background 0.15s;
+    }
+    .wa-header-actions button:hover    { background: rgba(255,255,255,0.16); }
+    .wa-header-actions button.active   { background: rgba(255,255,255,0.30); }
+
+    /* ── Chat area ──────────────────────────────────────────────────────── */
+    #messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1rem 4%;
+      background-color: var(--wa-bg);
+      /* subtle dotted wallpaper */
+      background-image: radial-gradient(circle, var(--wa-bg-pattern) 1px, transparent 1px);
+      background-size: 22px 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 0.18rem;
+    }
+
+    .wa-msg {
+      max-width: 65%;
+      padding: 0.4rem 0.55rem 0.35rem 0.6rem;
+      border-radius: 7.5px;
+      font-size: 0.92rem;
+      line-height: 1.4;
+      position: relative;
+      box-shadow: 0 1px 0.5px rgba(0,0,0,0.13);
+      word-wrap: break-word;
+      word-break: break-word;
+      white-space: pre-wrap;
+    }
+
+    .wa-msg-out {
+      align-self: flex-end;
+      background: var(--wa-green-light);
+      color: var(--wa-text);
+      border-top-right-radius: 0;
+      margin-left: auto;
+      margin-right: 6px;
+    }
+    .wa-msg-out::after {
+      content: "";
+      position: absolute;
+      top: 0; right: -7px;
+      width: 0; height: 0;
+      border-top: 8px solid var(--wa-green-light);
+      border-right: 8px solid transparent;
+    }
+    .wa-msg-in {
+      align-self: flex-start;
+      background: var(--wa-card);
+      color: var(--wa-text);
+      border-top-left-radius: 0;
+      margin-left: 6px;
+    }
+    .wa-msg-in::before {
+      content: "";
+      position: absolute;
+      top: 0; left: -7px;
+      width: 0; height: 0;
+      border-top: 8px solid var(--wa-card);
+      border-left: 8px solid transparent;
+    }
+
+    .wa-msg-meta {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 0.66rem;
+      color: var(--wa-text-muted);
+      float: right;
+      margin-left: 0.5rem;
+      margin-top: 0.2rem;
+      line-height: 1;
+      user-select: none;
+    }
+    .wa-msg-out .wa-msg-meta { color: #667781; }
+    .wa-msg-ticks { font-size: 0.85em; }
+    .wa-msg-ticks.read { color: var(--wa-tick-blue); }
+
+    /* Streaming bubble: a blinking caret hint while tokens arrive */
+    .wa-msg-streaming .wa-msg-text-node::after {
+      content: "▌";
+      color: var(--wa-text-muted);
+      margin-left: 1px;
+      animation: caret 1s steps(2) infinite;
+    }
+    @keyframes caret { 50% { opacity: 0; } }
+
+    /* clearfix-like trick so the floated meta doesn't break wrapping */
+    .wa-msg::after { content: ""; display: table; clear: both; }
+    .wa-msg-out::after, .wa-msg-in::before {
+      content: "";
+      display: block;
+    }
+
+    /* Date divider */
+    .wa-divider {
+      align-self: center;
+      background: rgba(255,255,255,0.92);
+      color: var(--wa-text-muted);
+      font-size: 0.72rem;
+      padding: 4px 12px;
+      border-radius: 6px;
+      margin: 0.6rem 0 0.4rem;
+      box-shadow: 0 1px 0.5px rgba(0,0,0,0.13);
+    }
+
+    /* Typing indicator */
+    .wa-typing {
+      align-self: flex-start;
+      background: var(--wa-card);
+      padding: 0.55rem 0.85rem;
+      border-radius: 7.5px;
+      border-top-left-radius: 0;
+      margin-left: 6px;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      box-shadow: 0 1px 0.5px rgba(0,0,0,0.13);
+      position: relative;
+    }
+    .wa-typing::before {
+      content: "";
+      position: absolute;
+      top: 0; left: -7px;
+      width: 0; height: 0;
+      border-top: 8px solid var(--wa-card);
+      border-left: 8px solid transparent;
+    }
+    .wa-typing .tdot {
+      width: 7px; height: 7px;
+      background: #9aa0a6;
+      border-radius: 50%;
+      animation: tbounce 1.2s infinite;
+    }
+    .wa-typing .tdot:nth-child(2) { animation-delay: 0.2s; }
+    .wa-typing .tdot:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes tbounce {
+      0%, 80%, 100% { transform: translateY(0); opacity: 0.45; }
+      40%           { transform: translateY(-4px); opacity: 1; }
+    }
+
+    /* Error banner */
+    .wa-error {
+      align-self: center;
+      background: var(--wa-error-bg);
+      border: 1px solid #fca5a5;
+      color: var(--wa-error);
+      border-radius: 8px;
+      padding: 0.45rem 0.75rem;
+      font-size: 0.82rem;
+      margin: 0.4rem 0;
+    }
+
+    /* Empty state */
+    .wa-empty {
+      margin: auto;
+      text-align: center;
+      color: var(--wa-text-muted);
+      font-size: 0.88rem;
+      line-height: 1.8;
+      max-width: 280px;
+      padding: 1.2rem;
+      background: rgba(255,255,255,0.85);
+      border-radius: 8px;
+      box-shadow: 0 1px 0.5px rgba(0,0,0,0.13);
+    }
+    .wa-empty .icon { font-size: 2.4rem; display: block; margin-bottom: 6px; }
+
+    /* Quick-reply chips (WhatsApp-style list buttons under a bot bubble) */
+    .wa-quick-replies {
+      align-self: stretch;
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+      margin: 0.3rem 0 0.2rem;
+      background: var(--wa-card);
+      border-radius: 7.5px;
+      overflow: hidden;
+      box-shadow: 0 1px 0.5px rgba(0,0,0,0.13);
+      max-width: 65%;
+      margin-left: 6px;
+    }
+    .wa-quick-reply-btn {
+      background: var(--wa-card);
+      color: var(--wa-green-dark);
+      border: none;
+      padding: 0.7rem 1rem;
+      font-size: 0.92rem;
+      font-weight: 500;
+      cursor: pointer;
+      text-align: center;
+      transition: background 0.12s;
+      font-family: inherit;
+      border-top: 1px solid var(--wa-divider);
+    }
+    .wa-quick-reply-btn:first-child { border-top: none; }
+    .wa-quick-reply-btn:hover:not(:disabled) { background: #f5f5f5; }
+    .wa-quick-reply-btn:disabled {
+      color: #b3b3b3; cursor: not-allowed;
+    }
+
+    /* ── Footer (input) ─────────────────────────────────────────────────── */
+    .wa-footer {
+      background: var(--wa-footer);
+      padding: 0.5rem 0.65rem;
+      display: flex;
+      align-items: flex-end;
+      gap: 0.5rem;
+      flex-shrink: 0;
+    }
+    .wa-input-wrap {
+      flex: 1;
+      background: #fff;
+      border-radius: 8px;
+      padding: 0.55rem 0.8rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      min-height: 42px;
+    }
+    .wa-input-wrap textarea {
+      flex: 1;
+      border: none;
+      outline: none;
+      resize: none;
+      font-family: inherit;
+      font-size: 0.95rem;
+      line-height: 1.35;
+      max-height: 110px;
+      background: transparent;
+      color: var(--wa-text);
+    }
+    .wa-send-btn {
+      background: var(--wa-green-dark);
+      color: #fff;
+      border: none;
+      width: 42px; height: 42px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 1.05rem;
+      display: inline-flex; align-items: center; justify-content: center;
+      transition: background 0.15s, opacity 0.15s;
+      flex-shrink: 0;
+    }
+    .wa-send-btn:disabled { opacity: 0.42; cursor: not-allowed; }
+    .wa-send-btn:not(:disabled):hover { background: var(--wa-green-darker); }
+
+    /* ── Phone setup modal ──────────────────────────────────────────────── */
+    .wa-modal-overlay {
+      position: fixed; inset: 0;
+      background: rgba(15,23,42,0.55);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 100;
+      backdrop-filter: blur(4px);
+    }
+    .wa-modal-overlay.hidden { display: none; }
+    .wa-modal-card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 1.6rem 1.4rem 1.3rem;
+      width: min(380px, 92vw);
+      box-shadow: 0 12px 32px rgba(0,0,0,0.32);
+    }
+    .wa-modal-card h2 {
+      font-size: 1.05rem; font-weight: 600;
+      margin-bottom: 0.35rem;
+      color: var(--wa-green-dark);
+    }
+    .wa-modal-card p {
+      font-size: 0.86rem;
+      color: var(--wa-text-muted);
+      margin-bottom: 1rem;
+      line-height: 1.5;
+    }
+    .wa-modal-card label {
+      display: block;
+      font-size: 0.72rem;
+      color: var(--wa-text-muted);
+      margin-bottom: 0.3rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .wa-modal-card input {
+      width: 100%;
+      padding: 0.65rem 0.85rem;
+      border: 1.5px solid #d1d5db;
+      border-radius: 8px;
+      font-family: inherit;
+      font-size: 1rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .wa-modal-card input:focus { border-color: var(--wa-green-dark); }
+    .wa-modal-card .hint {
+      font-size: 0.72rem;
+      color: var(--wa-text-muted);
+      margin-top: 0.35rem;
+      font-style: italic;
+    }
+    .wa-modal-actions {
+      display: flex; justify-content: flex-end; gap: 0.5rem;
+      margin-top: 1.1rem;
+    }
+    .wa-modal-actions button {
+      padding: 0.55rem 1.05rem;
+      border-radius: 8px;
+      border: none;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+    .wa-modal-actions .btn-secondary {
+      background: transparent;
+      color: var(--wa-text-muted);
+    }
+    .wa-modal-actions .btn-secondary:hover { background: #f0f2f5; }
+    .wa-modal-actions .btn-primary {
+      background: var(--wa-green-dark);
+      color: #fff;
+    }
+    .wa-modal-actions .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+    .wa-modal-actions .btn-primary:not(:disabled):hover { background: var(--wa-green-darker); }
+    .wa-modal-card .err {
+      color: var(--wa-error);
+      font-size: 0.75rem;
+      margin-top: 0.35rem;
+      min-height: 1em;
+    }
+
+    /* ── Debug pane (unchanged in spirit) ───────────────────────────────── */
+    #debug-pane {
+      width: 0;
+      overflow: hidden;
+      transition: width 0.25s ease;
+      background: #0f172a;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      color: #cbd5e1;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+    #container.debug-open #debug-pane { width: 540px; }
+
+    #debug-inner {
+      width: 540px;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #debug-header {
+      padding: 0.85rem 1rem 0.65rem;
+      border-bottom: 1px solid #1e293b;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    #debug-header h2 {
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .debug-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+
+    #phase-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      background: #1e293b;
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 0.8rem;
+      color: #94a3b8;
+    }
+    #phase-badge.empty { color: #475569; font-style: italic; }
+    #phase-badge .phase-num  { font-weight: 700; color: #38bdf8; font-size: 0.9rem; }
+    #phase-badge .phase-name { color: #e2e8f0; font-weight: 600; }
+
+    /* Phase tracker (only for lab_booking) */
+    #phase-tracker {
+      display: none;
+      align-items: center;
+      gap: 0.35rem;
+      background: #1e293b;
+      border-radius: 6px;
+      padding: 4px 10px;
+    }
+    #phase-tracker.visible { display: inline-flex; }
+    #phase-tracker .pt-dot {
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      background: #0f172a;
+      border: 1px solid #334155;
+      color: #475569;
+      font-size: 0.6rem;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }
+    #phase-tracker .pt-dot.done    { background: #064e3b; color: #6ee7b7; border-color: #065f46; }
+    #phase-tracker .pt-dot.current { background: #1e3a5f; color: #93c5fd; border-color: #38bdf8;
+                                     box-shadow: 0 0 0 2px rgba(56,189,248,0.18); }
+    #phase-tracker .pt-arrow { color: #334155; font-size: 0.55rem; }
+
+    /* Flow badge */
+    #flow-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      border: 1px solid transparent;
+      transition: background 0.15s, border-color 0.15s;
+      max-width: 100%;
+    }
+    #flow-badge .flow-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: currentColor;
+      box-shadow: 0 0 6px currentColor;
+      flex-shrink: 0;
+    }
+    #flow-badge .flow-handoff {
+      font-weight: 600;
+      opacity: 0.75;
+      letter-spacing: 0;
+      text-transform: none;
+      margin-left: 0.25rem;
+    }
+    .flow-lab_booking          { background: #0c2e57; color: #93c5fd; border-color: #1e3a5f; }
+    .flow-manage_reservations  { background: #422006; color: #fdba74; border-color: #7c2d12; }
+    .flow-patient_registration { background: #2e1065; color: #c4b5fd; border-color: #4c1d95; }
+    .flow-lead_creation        { background: #4c0519; color: #fca5a5; border-color: #7f1d1d; }
+    .flow-ivr_to_digital       { background: #134e4a; color: #5eead4; border-color: #115e59; }
+    .flow-info                 { background: #064e3b; color: #6ee7b7; border-color: #065f46; }
+    .flow-menu                 { background: #1e293b; color: #64748b; border-color: #1e293b; }
+    .flow-unknown              { background: #1e293b; color: #94a3b8; border-color: #334155; }
+
+    /* Caller badge */
+    #caller-badge {
+      display: inline-flex; align-items: center; gap: 0.35rem;
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      border: 1px solid #273549;
+    }
+    #caller-badge.status-authenticated { background: #064e3b; color: #6ee7b7; border-color: #065f46; }
+    #caller-badge.status-ambiguous     { background: #422006; color: #fdba74; border-color: #7c2d12; }
+    #caller-badge.status-not_found     { background: #4c0519; color: #fca5a5; border-color: #7f1d1d; }
+    #caller-badge.status-invalid_phone,
+    #caller-badge.status-error         { background: #1e293b; color: #fca5a5; border-color: #4c0519; }
+    #caller-badge.status-anonymous     { background: #1e293b; color: #64748b; }
+    #caller-badge .caller-dot {
+      width: 6px; height: 6px; border-radius: 50%; background: currentColor;
+    }
+
+    #stats {
+      font-size: 0.7rem;
+      color: #64748b;
+      letter-spacing: 0.04em;
+      margin-left: auto;
+      text-align: right;
+    }
+    #stats strong { color: #cbd5e1; font-weight: 600; }
+    #stats .latency { color: #fbbf24; }
+
+    .booking-strip {
+      background: #1e293b;
+      border-radius: 6px;
+      padding: 0.45rem 0.65rem;
+      font-size: 0.72rem;
+      line-height: 1.55;
+      color: #cbd5e1;
+      border: 1px solid #273549;
+    }
+    .booking-strip.hidden { display: none; }
+    .booking-strip-empty { color: #475569; font-style: italic; }
+    .booking-strip .row { display: flex; align-items: baseline; gap: 0.4rem; }
+    .booking-strip .tick { font-size: 0.7rem; flex-shrink: 0; width: 0.9rem; text-align: center; }
+    .booking-strip .tick.ok      { color: #6ee7b7; }
+    .booking-strip .tick.pending { color: #64748b; }
+    .booking-strip .k { color: #64748b; flex-shrink: 0; }
+    .booking-strip .v { color: #e2e8f0; font-weight: 600; word-break: break-word; }
+    .booking-strip .v-empty { color: #475569; font-style: italic; font-weight: 400; }
+    .booking-strip details { margin-top: 0.35rem; }
+    .booking-strip summary {
+      cursor: pointer; user-select: none;
+      color: #64748b; font-size: 0.66rem;
+      letter-spacing: 0.06em; text-transform: uppercase;
+    }
+    .booking-strip details[open] summary { color: #94a3b8; }
+    .booking-strip pre {
+      margin-top: 0.3rem;
+      font-family: 'Menlo', 'Consolas', monospace;
+      font-size: 0.66rem;
+      color: #94a3b8;
+      background: #0f172a;
+      padding: 0.4rem 0.5rem;
+      border-radius: 4px;
+      white-space: pre-wrap;
+      word-break: break-all;
+      max-height: 180px;
+      overflow-y: auto;
+    }
+
+    #debug-toolbar { display: flex; gap: 0.4rem; align-items: stretch; }
+    #debug-search {
+      flex: 1; min-width: 0;
+      background: #1e293b; border: 1px solid #273549;
+      border-radius: 6px; color: #e2e8f0;
+      padding: 5px 9px; font-size: 0.78rem;
+      outline: none; transition: border-color 0.15s;
+    }
+    #debug-search::placeholder { color: #475569; }
+    #debug-search:focus { border-color: #38bdf8; }
+    .toolbar-btn {
+      background: #1e293b; border: 1px solid #273549;
+      color: #94a3b8; border-radius: 6px;
+      padding: 4px 8px; font-size: 0.7rem; font-weight: 600;
+      cursor: pointer; white-space: nowrap;
+      letter-spacing: 0.04em; text-transform: uppercase;
+      transition: background 0.15s, color 0.15s;
+    }
+    .toolbar-btn:hover  { background: #263145; color: #e2e8f0; }
+    .toolbar-btn.active { background: #1e3a5f; color: #93c5fd; border-color: #1e3a5f; }
+
+    #debug-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0.65rem 0.75rem 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    #debug-empty {
+      margin: auto;
+      text-align: center;
+      color: #334155;
+      font-size: 0.82rem;
+      line-height: 2;
+    }
+
+    .turn-group { display: flex; flex-direction: column; gap: 0.4rem; }
+    .turn-sep   { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.3rem; flex-shrink: 0; }
+    .turn-num   {
+      font-size: 0.65rem; font-weight: 700; letter-spacing: 0.12em;
+      text-transform: uppercase; color: #64748b;
+      background: #1e293b; padding: 2px 8px; border-radius: 99px; flex-shrink: 0;
+    }
+    .turn-msg   {
+      font-size: 0.7rem; color: #94a3b8; flex: 1; min-width: 0;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-style: italic;
+    }
+    .turn-meta  { font-size: 0.62rem; color: #475569; flex-shrink: 0; font-family: 'Menlo', 'Consolas', monospace; }
+    .turn-group:first-child .turn-sep { margin-top: 0; }
+
+    .tool-card {
+      background: #1e293b; border-radius: 8px; overflow: hidden;
+      border: 1px solid #273549; transition: opacity 0.15s;
+    }
+    .tool-card.hidden { display: none; }
+    .tool-card-header {
+      display: flex; align-items: center;
+      padding: 0.5rem 0.65rem; cursor: pointer; user-select: none; gap: 0.5rem;
+    }
+    .tool-card-header:hover { background: #263145; }
+    .tool-name {
+      font-family: 'Menlo', 'Consolas', monospace;
+      font-size: 0.78rem; font-weight: 700; color: #7dd3fc; flex-shrink: 0;
+    }
+    .tool-args-preview {
+      font-family: 'Menlo', 'Consolas', monospace;
+      font-size: 0.7rem; color: #64748b; flex: 1; min-width: 0;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .tool-args-preview .arg-key { color: #94a3b8; }
+    .tool-args-preview .arg-val { color: #cbd5e1; }
+    .tool-status {
+      font-size: 0.66rem; font-weight: 700;
+      padding: 2px 7px; border-radius: 99px; flex-shrink: 0;
+    }
+    .tool-status.ok      { background: #064e3b; color: #6ee7b7; }
+    .tool-status.error   { background: #4c0519; color: #fca5a5; }
+    .tool-status.pending { background: #1e3a5f; color: #93c5fd; }
+    .tool-duration {
+      font-family: 'Menlo', 'Consolas', monospace;
+      font-size: 0.62rem; color: #94a3b8;
+      padding: 2px 6px; border-radius: 99px;
+      background: #1e293b; border: 1px solid #334155;
+      flex-shrink: 0; letter-spacing: 0.02em;
+    }
+    .tool-duration.slow { color: #fbbf24; border-color: #78350f; }
+    .tool-duration.verySlow { color: #fca5a5; border-color: #7f1d1d; }
+    .tool-chevron {
+      color: #475569; font-size: 0.7rem; flex-shrink: 0; transition: transform 0.15s;
+    }
+    .tool-card.open .tool-chevron { transform: rotate(90deg); }
+    .tool-card-body { display: none; padding: 0 0.65rem 0.65rem; }
+    .tool-card.open .tool-card-body { display: block; }
+    .tool-section { margin-top: 0.55rem; }
+    .tool-section-bar { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.25rem; }
+    .tool-section-label {
+      font-size: 0.65rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.06em; color: #475569;
+    }
+    .tool-section-meta { font-size: 0.65rem; color: #475569; margin-left: auto; }
+    .copy-btn {
+      background: transparent; border: 1px solid #273549;
+      color: #64748b; border-radius: 4px;
+      padding: 1px 6px; font-size: 0.62rem;
+      cursor: pointer; white-space: nowrap; transition: all 0.15s;
+    }
+    .copy-btn:hover { background: #263145; color: #cbd5e1; }
+    .copy-btn.flash { background: #064e3b; color: #6ee7b7; border-color: #064e3b; }
+    .tool-json {
+      font-family: 'Menlo', 'Consolas', monospace;
+      font-size: 0.72rem; color: #cbd5e1; background: #0f172a;
+      border-radius: 5px; padding: 0.5rem 0.6rem;
+      max-height: 320px; overflow: auto; line-height: 1.5;
+      white-space: pre; word-break: normal;
+    }
+    .tool-json.wrap { white-space: pre-wrap; word-break: break-all; }
+    .tool-json .j-key    { color: #93c5fd; }
+    .tool-json .j-str    { color: #6ee7b7; }
+    .tool-json .j-num    { color: #fbbf24; }
+    .tool-json .j-bool   { color: #f0abfc; }
+    .tool-json .j-null   { color: #94a3b8; font-style: italic; }
+    .tool-json .j-punct  { color: #64748b; }
+
+    /* Scrollbars */
+    #debug-body::-webkit-scrollbar,
+    .tool-json::-webkit-scrollbar,
+    .booking-strip pre::-webkit-scrollbar,
+    #messages::-webkit-scrollbar { width: 8px; height: 8px; }
+    #debug-body::-webkit-scrollbar-thumb,
+    .tool-json::-webkit-scrollbar-thumb,
+    .booking-strip pre::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 4px; }
+    #messages::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.2); border-radius: 4px; }
+    #debug-body::-webkit-scrollbar-thumb:hover,
+    .tool-json::-webkit-scrollbar-thumb:hover,
+    .booking-strip pre::-webkit-scrollbar-thumb:hover { background: #273549; }
+    #debug-body::-webkit-scrollbar-track,
+    .tool-json::-webkit-scrollbar-track,
+    #messages::-webkit-scrollbar-track { background: transparent; }
+  </style>
+</head>
+<body>
+
+<!-- ── Phone setup modal (shown on first load) ──────────────────────────── -->
+<div id="phone-modal" class="wa-modal-overlay hidden">
+  <div class="wa-modal-card">
+    <h2>Welcome</h2>
+    <p>
+      To receive personalized assistance from Ospedale Salus,
+      enter the phone number you want to use for this chat.
+      We'll use it to recognize you.
+    </p>
+    <label for="modal-phone-input">Phone number</label>
+    <input id="modal-phone-input" type="tel" inputmode="tel"
+           placeholder="+39 333 123 4567" autocomplete="tel" />
+    <div class="hint">Tip: include the international prefix (e.g. +39).</div>
+    <div id="modal-err" class="err"></div>
+    <div class="wa-modal-actions">
+      <button id="modal-cancel" class="btn-secondary">Cancel</button>
+      <button id="modal-confirm" class="btn-primary">Start chat</button>
+    </div>
+  </div>
+</div>
+
+<div id="container">
+
+  <!-- ── Chat pane ─────────────────────────────────────────────────────── -->
+  <div id="chat-pane">
+    <div class="wa-header">
+      <div class="wa-avatar" title="Ospedale Salus">K</div>
+      <div class="wa-header-info">
+        <div class="wa-header-name">Ospedale Salus</div>
+        <div class="wa-header-status">
+          <span class="dot-online"></span>
+          <span id="header-status-text">online</span>
+        </div>
+      </div>
+      <div class="wa-header-actions">
+        <button id="debug-toggle" onclick="toggleDebug()" title="Debug panel (Ctrl+D)">🔧</button>
+        <button onclick="openPhoneModal()" title="Change number">📱</button>
+        <button onclick="resetChat()" title="Reset chat">↺</button>
+      </div>
+    </div>
+
+    <div id="messages">
+      <div class="wa-empty" id="empty">
+        <span class="icon">💬</span>
+        Type a message to start the conversation with Ospedale Salus.
+      </div>
+    </div>
+
+    <div class="wa-footer">
+      <div class="wa-input-wrap">
+        <textarea id="input" rows="1" placeholder="Type a message…"></textarea>
+      </div>
+      <button id="send-btn" class="wa-send-btn" onclick="sendMessage()" title="Send">➤</button>
+    </div>
+  </div>
+
+  <!-- ── Debug pane ────────────────────────────────────────────────────── -->
+  <div id="debug-pane">
+    <div id="debug-inner">
+      <div id="debug-header">
+        <div class="debug-row">
+          <h2>Agent Debug</h2>
+          <span id="stats"></span>
+        </div>
+        <div class="debug-row">
+          <div id="flow-badge" class="flow-menu"><span class="flow-dot"></span><span class="flow-label">Menu</span></div>
+          <div id="phase-badge" class="empty"><span>—</span></div>
+          <div id="phase-tracker"></div>
+        </div>
+        <div class="debug-row">
+          <div id="caller-badge" class="status-anonymous">
+            <span class="caller-dot"></span><span id="caller-label">anonymous</span>
+          </div>
+        </div>
+        <div id="booking-strip" class="booking-strip booking-strip-empty hidden">Booking state empty.</div>
+        <div id="debug-toolbar">
+          <input id="debug-search" type="search" placeholder="Search tool, args, output…" />
+          <button id="wrap-btn" class="toolbar-btn" onclick="toggleWrap()" title="Wrap text">Wrap</button>
+          <button class="toolbar-btn" onclick="expandAll(true)" title="Expand all">▾▾</button>
+          <button class="toolbar-btn" onclick="expandAll(false)" title="Collapse all">▸▸</button>
+          <button class="toolbar-btn" onclick="clearTrace()" title="Clear panel">✕</button>
+        </div>
+      </div>
+      <div id="debug-body">
+        <div id="debug-empty">No data.<br>Send a message to start.</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // Same-origin when served by FastAPI; fallback for file://
+  // Port 5678 matches the default in start.bat (6666 is blocked by browsers as an unsafe port).
+  const API = window.location.protocol === "file:" ? "http://localhost:5678" : "";
+  const PHONE_STORAGE_KEY = "koelliker.caller_phone";
+
+  let sessionId      = crypto.randomUUID();
+  let callerPhone    = null;   // populated from localStorage / modal
+  let loading        = false;
+  let debugOpen      = false;
+  let wrapMode       = false;
+  let turnCounter    = 0;
+  let toolCounter    = 0;
+  let lastLatencyMs  = null;
+
+  const containerEl   = document.getElementById("container");
+  const messagesEl    = document.getElementById("messages");
+  const inputEl       = document.getElementById("input");
+  const sendBtn       = document.getElementById("send-btn");
+  const debugToggle   = document.getElementById("debug-toggle");
+  const phaseBadgeEl  = document.getElementById("phase-badge");
+  const phaseTrackerEl= document.getElementById("phase-tracker");
+  const flowBadgeEl   = document.getElementById("flow-badge");
+  const callerBadgeEl = document.getElementById("caller-badge");
+  const callerLabelEl = document.getElementById("caller-label");
+  const debugBodyEl   = document.getElementById("debug-body");
+  const bookingEl     = document.getElementById("booking-strip");
+  const searchEl      = document.getElementById("debug-search");
+  const statsEl       = document.getElementById("stats");
+  const wrapBtn       = document.getElementById("wrap-btn");
+  const headerStatus  = document.getElementById("header-status-text");
+
+  // ── Flow metadata
+  const FLOW_META = {
+    lab_booking:          { label: "Booking",      cssClass: "flow-lab_booking"          },
+    manage_reservations:  { label: "Manage appts", cssClass: "flow-manage_reservations"  },
+    patient_registration: { label: "Registration", cssClass: "flow-patient_registration" },
+    lead_creation:        { label: "Callback",     cssClass: "flow-lead_creation"        },
+    ivr_to_digital:       { label: "Digital Link", cssClass: "flow-ivr_to_digital"       },
+    info:                 { label: "Info",         cssClass: "flow-info"                 },
+    menu:                 { label: "Menu",         cssClass: "flow-menu"                 },
+  };
+  const PHASE_LABELS = { 1: "INSURANCE", 2: "DOCTOR", 3: "SERVICE", 4: "DATE_TIME", 5: "BOOKED" };
+  const TOTAL_PHASES = 5;
+
+  // ── Caller status labels (debug badge + header status)
+  const CALLER_LABELS = {
+    authenticated: "recognized",
+    ambiguous:     "ambiguous",
+    not_found:     "unknown",
+    invalid_phone: "invalid number",
+    error:         "auth error",
+    anonymous:     "anonymous",
+  };
+
+  // ── Init from localStorage
+  function loadStoredPhone() {
+    try { return localStorage.getItem(PHONE_STORAGE_KEY) || null; } catch { return null; }
+  }
+  function storePhone(p) {
+    try { p ? localStorage.setItem(PHONE_STORAGE_KEY, p) : localStorage.removeItem(PHONE_STORAGE_KEY); }
+    catch {}
+  }
+  function formatPhoneDisplay(p) {
+    if (!p) return "";
+    // Light formatting: keep + and group digits in chunks
+    const digits = p.replace(/\D/g, "");
+    const hasPlus = p.trim().startsWith("+");
+    if (digits.length < 6) return p;
+    // Italian-style: +39 333 123 4567
+    if (digits.startsWith("39") && hasPlus) {
+      return `+39 ${digits.slice(2, 5)} ${digits.slice(5, 8)} ${digits.slice(8)}`.trim();
+    }
+    return (hasPlus ? "+" : "") + digits;
+  }
+  function updateHeaderStatus() {
+    if (callerPhone) {
+      headerStatus.textContent = formatPhoneDisplay(callerPhone) + " · online";
+    } else {
+      headerStatus.textContent = "anonymous · online";
+    }
+  }
+
+  inputEl.addEventListener("keydown", e => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  });
+  // Auto-resize textarea
+  inputEl.addEventListener("input", () => {
+    inputEl.style.height = "auto";
+    inputEl.style.height = Math.min(inputEl.scrollHeight, 110) + "px";
+  });
+
+  // Ctrl+D → debug
+  document.addEventListener("keydown", e => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d") {
+      e.preventDefault(); toggleDebug();
+    }
+  });
+
+  searchEl.addEventListener("input", () => applyFilter(searchEl.value));
+
+  function toggleDebug() {
+    debugOpen = !debugOpen;
+    containerEl.classList.toggle("debug-open", debugOpen);
+    debugToggle.classList.toggle("active", debugOpen);
+  }
+
+  function setLoading(val) {
+    loading = val;
+    inputEl.disabled = val;
+    sendBtn.disabled = val;
+  }
+
+  function scrollBottom() { messagesEl.scrollTop = messagesEl.scrollHeight; }
+  function escHtml(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+  function debugAtBottom() {
+    const slack = 24;
+    return debugBodyEl.scrollTop + debugBodyEl.clientHeight >= debugBodyEl.scrollHeight - slack;
+  }
+  function nowHHMM() {
+    const d = new Date();
+    return `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+  }
+
+  // ── Bubbles ─────────────────────────────────────────────────────────────
+  function addBubble(role, text) {
+    document.getElementById("empty")?.remove();
+    const msg = document.createElement("div");
+    msg.className = role === "user" ? "wa-msg wa-msg-out" : "wa-msg wa-msg-in";
+    const ticks = role === "user"
+      ? '<span class="wa-msg-ticks read">✓✓</span>'
+      : "";
+    msg.innerHTML = `${escHtml(text)}<span class="wa-msg-meta">${nowHHMM()} ${ticks}</span>`;
+    messagesEl.appendChild(msg);
+    scrollBottom();
+    return msg;
+  }
+
+  // ── Streaming bubble (token-by-token) ──────────────────────────────────
+  // Creates a bot bubble whose text grows as deltas arrive. Returns an
+  // object with `append(token)` to push more content and `finalize()`
+  // to stamp the timestamp once the stream is over.
+  function openStreamBubble() {
+    document.getElementById("empty")?.remove();
+    document.getElementById("typing")?.remove();
+    const msg = document.createElement("div");
+    msg.className = "wa-msg wa-msg-in wa-msg-streaming";
+    const textNode = document.createElement("span");
+    textNode.className = "wa-msg-text-node";
+    const meta = document.createElement("span");
+    meta.className = "wa-msg-meta";
+    meta.textContent = "…";
+    msg.appendChild(textNode);
+    msg.appendChild(meta);
+    messagesEl.appendChild(msg);
+    scrollBottom();
+    let buf = "";
+    const stickWhenAtBottom = () => {
+      const slack = 60;
+      if (messagesEl.scrollTop + messagesEl.clientHeight >= messagesEl.scrollHeight - slack) {
+        scrollBottom();
+      }
+    };
+    return {
+      append(chunk) {
+        buf += chunk;
+        textNode.textContent = buf;
+        stickWhenAtBottom();
+      },
+      finalize() {
+        meta.textContent = nowHHMM();
+        msg.classList.remove("wa-msg-streaming");
+      },
+      text() { return buf; },
+    };
+  }
+
+  function showTyping() {
+    document.getElementById("empty")?.remove();
+    const typing = document.createElement("div");
+    typing.className = "wa-typing";
+    typing.id = "typing";
+    typing.innerHTML = '<div class="tdot"></div><div class="tdot"></div><div class="tdot"></div>';
+    messagesEl.appendChild(typing);
+    scrollBottom();
+  }
+  function removeTyping() { document.getElementById("typing")?.remove(); }
+
+  // ── Quick-reply buttons (WhatsApp-style list) ──────────────────────────
+  // Renders a vertical stack of clickable chips under the last bot bubble.
+  // Clicking any chip sends its `value` as the next user message and
+  // disables the chips so they can't be tapped twice.
+  function clearStaleQuickReplies() {
+    document.querySelectorAll(".wa-quick-replies").forEach(el => {
+      el.querySelectorAll("button").forEach(b => { b.disabled = true; });
+    });
+  }
+
+  function renderQuickReplies(items) {
+    if (!Array.isArray(items) || items.length === 0) return;
+    clearStaleQuickReplies();
+    const wrap = document.createElement("div");
+    wrap.className = "wa-quick-replies";
+    items.forEach(it => {
+      const btn = document.createElement("button");
+      btn.className = "wa-quick-reply-btn";
+      btn.type = "button";
+      btn.textContent = it.label || it.value || "";
+      btn.addEventListener("click", () => {
+        if (btn.disabled) return;
+        clearStaleQuickReplies();
+        inputEl.value = it.value || it.label || "";
+        sendMessage();
+      });
+      wrap.appendChild(btn);
+    });
+    messagesEl.appendChild(wrap);
+    scrollBottom();
+  }
+
+  function showError(msg) {
+    const el = document.createElement("div");
+    el.className = "wa-error";
+    el.textContent = "⚠️ " + msg;
+    messagesEl.appendChild(el);
+    scrollBottom();
+    setTimeout(() => el.remove(), 5000);
+  }
+
+  // ── JSON helpers (debug pane) ───────────────────────────────────────────
+  function highlightJson(value) {
+    const json = typeof value === "string" ? value : JSON.stringify(value, null, 2);
+    return escHtml(json).replace(
+      /(&quot;(?:[^&\\]|\\.)*?&quot;)(\s*:)?|\b(true|false|null)\b|-?\b\d+(?:\.\d+)?\b|([{}\[\],])/g,
+      (m, str, colon, kw, punct) => {
+        if (str && colon) return `<span class="j-key">${str}</span>${colon}`;
+        if (str)          return `<span class="j-str">${str}</span>`;
+        if (kw === "true" || kw === "false") return `<span class="j-bool">${kw}</span>`;
+        if (kw === "null")                   return `<span class="j-null">${kw}</span>`;
+        if (punct) return `<span class="j-punct">${punct}</span>`;
+        return `<span class="j-num">${m}</span>`;
+      },
+    );
+  }
+
+  function jsonSize(value) {
+    try {
+      const s = typeof value === "string" ? value : JSON.stringify(value);
+      const bytes = new Blob([s]).size;
+      if (bytes < 1024)    return `${bytes} B`;
+      if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
+      return `${(bytes / 1048576).toFixed(2)} MB`;
+    } catch { return "?"; }
+  }
+
+  function argsPreview(args) {
+    if (!args || typeof args !== "object" || Object.keys(args).length === 0) return "";
+    return Object.entries(args).map(([k, v]) => {
+      let val;
+      if (v === null || v === undefined) val = "null";
+      else if (typeof v === "string")    val = `"${v.length > 40 ? v.slice(0, 37) + "…" : v}"`;
+      else if (Array.isArray(v))         val = `[…${v.length}]`;
+      else if (typeof v === "object")    val = `{…}`;
+      else                                val = String(v);
+      return `<span class="arg-key">${escHtml(k)}</span>=<span class="arg-val">${escHtml(val)}</span>`;
+    }).join(", ");
+  }
+
+  async function copyText(text, btn) {
+    try {
+      await navigator.clipboard.writeText(text);
+      btn.classList.add("flash");
+      const orig = btn.textContent;
+      btn.textContent = "✓ Copied";
+      setTimeout(() => { btn.classList.remove("flash"); btn.textContent = orig; }, 1100);
+    } catch { btn.textContent = "✗ Error"; }
+  }
+
+  // ── Badges
+  function setFlowBadge(flow, transferredFrom) {
+    const meta = FLOW_META[flow] || { label: flow || "—", cssClass: "flow-unknown" };
+    flowBadgeEl.className = meta.cssClass;
+    const handoff = transferredFrom
+      ? `<span class="flow-handoff">↩ from ${escHtml(transferredFrom)}</span>`
+      : "";
+    flowBadgeEl.innerHTML =
+      `<span class="flow-dot"></span>` +
+      `<span class="flow-label">${escHtml(meta.label)}</span>` +
+      handoff;
+  }
+
+  function setPhaseBadge(phase, phaseName) {
+    if (phase != null) {
+      phaseBadgeEl.classList.remove("empty");
+      phaseBadgeEl.innerHTML = `
+        <span class="phase-num">${phase}</span>
+        <span style="color:#475569">/</span>
+        <span class="phase-name">${escHtml(phaseName || PHASE_LABELS[phase] || "?")}</span>
+      `;
+    } else if (phaseName && phaseName !== "?" && phaseName !== "MENU") {
+      phaseBadgeEl.classList.remove("empty");
+      phaseBadgeEl.innerHTML = `<span class="phase-name">${escHtml(phaseName)}</span>`;
+    } else {
+      phaseBadgeEl.classList.add("empty");
+      phaseBadgeEl.innerHTML = `<span>—</span>`;
+    }
+  }
+
+  function setPhaseTracker(flow, phase) {
+    if (flow !== "lab_booking" || phase == null) {
+      phaseTrackerEl.classList.remove("visible");
+      phaseTrackerEl.innerHTML = "";
+      return;
+    }
+    const parts = [];
+    for (let i = 1; i <= TOTAL_PHASES; i++) {
+      const cls = i < phase ? "done" : i === phase ? "current" : "";
+      parts.push(`<span class="pt-dot ${cls}" title="${escHtml(PHASE_LABELS[i])}">${i}</span>`);
+      if (i < TOTAL_PHASES) parts.push(`<span class="pt-arrow">›</span>`);
+    }
+    phaseTrackerEl.innerHTML = parts.join("");
+    phaseTrackerEl.classList.add("visible");
+  }
+
+  function setCallerBadge(caller) {
+    const status = (caller && caller.status) || "anonymous";
+    callerBadgeEl.className = `status-${status}`;
+    let label = CALLER_LABELS[status] || status;
+    if (caller && caller.userid && caller.name) {
+      label += ` · ${caller.name} ${caller.surname || ""}`.trim();
+    } else if (caller && caller.phone) {
+      label += ` · +${caller.phone}`;
+    }
+    callerBadgeEl.innerHTML =
+      `<span class="caller-dot"></span><span>${escHtml(label)}</span>`;
+  }
+
+  // ── Booking strip
+  function renderBooking(flow, booking) {
+    if (flow !== "lab_booking") {
+      bookingEl.classList.add("hidden");
+      return;
+    }
+    bookingEl.classList.remove("hidden");
+    const visible = Object.fromEntries(
+      Object.entries(booking || {}).filter(([k]) => !k.startsWith("_")),
+    );
+    if (Object.keys(visible).length === 0) {
+      bookingEl.className = "booking-strip booking-strip-empty";
+      bookingEl.textContent = "Booking state empty.";
+      return;
+    }
+    bookingEl.className = "booking-strip";
+    const isFilled = v => {
+      if (v === null || v === undefined || v === "") return false;
+      if (typeof v === "object" && Object.keys(v).length === 0) return false;
+      return true;
+    };
+    const fmt = v => {
+      if (!isFilled(v))           return `<span class="v-empty">—</span>`;
+      if (typeof v === "boolean") return `<span class="v">${v ? "✓ true" : "✗ false"}</span>`;
+      if (typeof v === "object")  return `<span class="v">${escHtml(JSON.stringify(v))}</span>`;
+      return `<span class="v">${escHtml(String(v))}</span>`;
+    };
+    const order = ["insurance_name", "insurance_id", "doctor_name", "doctor_id",
+                   "any_doctor", "service", "slot", "confirmed"];
+    const known = order.filter(k => k in visible);
+    const extras = Object.keys(visible).filter(k => !order.includes(k));
+    const lines = [...known, ...extras].map(k => {
+      const filled = isFilled(visible[k]);
+      const tickCls = filled ? "ok" : "pending";
+      const tickGlyph = filled ? "✓" : "⏳";
+      return `<div class="row">
+        <span class="tick ${tickCls}">${tickGlyph}</span>
+        <span class="k">${escHtml(k)}:</span>
+        ${fmt(visible[k])}
+      </div>`;
+    });
+    bookingEl.innerHTML = `
+      ${lines.join("")}
+      <details>
+        <summary>RAW JSON</summary>
+        <pre>${escHtml(JSON.stringify(visible, null, 2))}</pre>
+      </details>
+    `;
+  }
+
+  // ── Stats
+  function refreshStats() {
+    const totalCards = debugBodyEl.querySelectorAll(".tool-card").length;
+    const totalTurns = debugBodyEl.querySelectorAll(".turn-group").length;
+    const latency = lastLatencyMs == null ? "" :
+      ` · <span class="latency">${formatLatency(lastLatencyMs)}</span>`;
+    statsEl.innerHTML = `<strong>${totalTurns}</strong> turns · <strong>${totalCards}</strong> tools${latency}`;
+  }
+  function formatLatency(ms) {
+    return ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(2)} s`;
+  }
+
+  // ── Filter / search
+  function applyFilter(query) {
+    query = (query || "").trim().toLowerCase();
+    debugBodyEl.querySelectorAll(".tool-card").forEach(card => {
+      const haystack = card.dataset.searchHay || "";
+      card.classList.toggle("hidden", query && !haystack.includes(query));
+    });
+    debugBodyEl.querySelectorAll(".turn-group").forEach(group => {
+      const visible = group.querySelectorAll(".tool-card:not(.hidden)").length;
+      group.style.display = (query && visible === 0) ? "none" : "";
+    });
+  }
+
+  function expandAll(open) {
+    debugBodyEl.querySelectorAll(".tool-card").forEach(c => c.classList.toggle("open", open));
+  }
+  function toggleWrap() {
+    wrapMode = !wrapMode;
+    wrapBtn.classList.toggle("active", wrapMode);
+    debugBodyEl.querySelectorAll(".tool-json").forEach(el => el.classList.toggle("wrap", wrapMode));
+  }
+  function emptyDebugMarkup() {
+    return `<div id="debug-empty">No data.<br>Send a message to start.</div>`;
+  }
+  function clearTrace() {
+    if (!confirm("Clear the entire tool history from the panel?")) return;
+    turnCounter = 0; toolCounter = 0; lastLatencyMs = null;
+    debugBodyEl.innerHTML = emptyDebugMarkup();
+    refreshStats();
+  }
+
+  // ── Render debug turn
+  function renderDebug(debug, userMessage) {
+    debug = debug || {};
+    document.getElementById("debug-empty")?.remove();
+
+    const flow            = debug.flow || (debug.flow === null ? "menu" : "unknown");
+    const transferredFrom = debug.transferred_from || null;
+    setFlowBadge(flow, transferredFrom);
+    setPhaseBadge(debug.phase, debug.phase_name);
+    setPhaseTracker(flow, debug.phase);
+    setCallerBadge(debug.caller);
+    renderBooking(flow, debug.booking);
+
+    turnCounter += 1;
+    const tools = Array.isArray(debug.tool_trace) ? debug.tool_trace : [];
+    const stickToBottom = debugAtBottom();
+
+    const group = document.createElement("div");
+    group.className = "turn-group";
+    const sep = document.createElement("div");
+    sep.className = "turn-sep";
+    sep.innerHTML = `
+      <span class="turn-num">turn ${turnCounter}</span>
+      <span class="turn-msg">${userMessage ? "→ " + escHtml(userMessage) : ""}</span>
+      <span class="turn-meta">${tools.length} tool${tools.length === 1 ? "" : "s"}${
+        lastLatencyMs == null ? "" : " · " + formatLatency(lastLatencyMs)
+      }</span>
+    `;
+    group.appendChild(sep);
+
+    if (tools.length === 0) {
+      const noop = document.createElement("div");
+      noop.style.cssText = "color:#475569;font-size:0.7rem;font-style:italic;padding:0.2rem 0.65rem 0.4rem";
+      noop.textContent = "No tool called in this turn.";
+      group.appendChild(noop);
+    } else {
+      tools.forEach(item => group.appendChild(renderToolCard(item)));
+    }
+
+    debugBodyEl.appendChild(group);
+    if (stickToBottom) debugBodyEl.scrollTop = debugBodyEl.scrollHeight;
+    refreshStats();
+    if (searchEl.value) applyFilter(searchEl.value);
+  }
+
+  function renderToolCard(item) {
+    toolCounter += 1;
+    const status = item.output === null || item.output === undefined
+      ? "pending"
+      : (item.output && typeof item.output === "object" && item.output.status === "error" ? "error" : "ok");
+    const statusLabel = { ok: "OK", error: "ERR", pending: "…" }[status];
+
+    const inputJson  = JSON.stringify(item.input  ?? {}, null, 2);
+    const hasOutput  = item.output !== null && item.output !== undefined;
+    const outputJson = hasOutput ? JSON.stringify(item.output, null, 2) : "(pending)";
+    const outputSize = hasOutput ? jsonSize(item.output) : "—";
+
+    const outputBytes = hasOutput ? new Blob([outputJson]).size : 0;
+    const startOpen   = status === "error" || outputBytes < 2048;
+
+    const card = document.createElement("div");
+    card.className = "tool-card" + (startOpen ? " open" : "");
+    card.dataset.searchHay = (
+      String(item.tool || "") + " " +
+      JSON.stringify(item.input ?? {}) + " " +
+      (hasOutput ? JSON.stringify(item.output) : "")
+    ).toLowerCase();
+
+    const argsHtml = argsPreview(item.input);
+    // Per-tool duration badge — recorded server-side by the
+    // ToolTimingHandler callback and merged into the trace.
+    let durationHtml = "";
+    if (typeof item.duration_ms === "number") {
+        const ms = item.duration_ms;
+        const cls = ms > 2000 ? " verySlow" : ms > 800 ? " slow" : "";
+        durationHtml = `<span class="tool-duration${cls}" title="Tool execution time">${formatLatency(ms)}</span>`;
+    }
+    card.innerHTML = `
+      <div class="tool-card-header">
+        <span class="tool-name">${escHtml(item.tool || "(unknown)")}</span>
+        <span class="tool-args-preview">${argsHtml}</span>
+        ${durationHtml}
+        <span class="tool-status ${status}">${statusLabel}</span>
+        <span class="tool-chevron">▶</span>
+      </div>
+      <div class="tool-card-body">
+        <div class="tool-section">
+          <div class="tool-section-bar">
+            <span class="tool-section-label">Input</span>
+            <span class="tool-section-meta">${jsonSize(inputJson)}</span>
+            <button class="copy-btn" data-copy="input">📋 Copia</button>
+          </div>
+          <pre class="tool-json${wrapMode ? " wrap" : ""}" data-json="input">${highlightJson(inputJson)}</pre>
+        </div>
+        <div class="tool-section">
+          <div class="tool-section-bar">
+            <span class="tool-section-label">Output</span>
+            <span class="tool-section-meta">${outputSize}</span>
+            <button class="copy-btn" data-copy="output">📋 Copia</button>
+          </div>
+          <pre class="tool-json${wrapMode ? " wrap" : ""}" data-json="output">${
+            hasOutput ? highlightJson(outputJson) : '<span style="color:#475569;font-style:italic">pending…</span>'
+          }</pre>
+        </div>
+      </div>
+    `;
+    card.querySelector(".tool-card-header").addEventListener("click", () => card.classList.toggle("open"));
+    card.querySelectorAll(".copy-btn").forEach(btn => {
+      btn.addEventListener("click", e => {
+        e.stopPropagation();
+        const which = btn.dataset.copy;
+        const text  = which === "input" ? inputJson : outputJson;
+        copyText(text, btn);
+      });
+    });
+    return card;
+  }
+
+  // ── Send / reset
+  async function sendMessage() {
+    const text = inputEl.value.trim();
+    if (!text || loading) return;
+    inputEl.value = "";
+    inputEl.style.height = "auto";
+    addBubble("user", text);
+    setLoading(true);
+    showTyping();
+    const t0 = performance.now();
+    let streamBubble = null;
+    let finalDebug = null;
+    let finalQuickReplies = null;
+    try {
+      const res = await fetch(`${API}/chat/stream`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Accept": "text/event-stream" },
+        body: JSON.stringify({
+          session_id:   sessionId,
+          message:      text,
+          caller_phone: callerPhone || null,
+        }),
+      });
+      if (!res.ok || !res.body) {
+        const body = await res.text().catch(() => "");
+        throw new Error(`HTTP ${res.status}${body ? ` — ${body.slice(0, 200)}` : ""}`);
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let pending = "";
+      // SSE: events end with "\n\n". Read chunks, split by "\n\n", parse each `data: <json>` line.
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        pending += decoder.decode(value, { stream: true });
+        let idx;
+        while ((idx = pending.indexOf("\n\n")) !== -1) {
+          const frame = pending.slice(0, idx);
+          pending = pending.slice(idx + 2);
+          const line = frame.split("\n").find(l => l.startsWith("data:"));
+          if (!line) continue;
+          let event;
+          try { event = JSON.parse(line.slice(5).trim()); }
+          catch { continue; }
+          if (event.type === "delta") {
+            if (!streamBubble) { removeTyping(); streamBubble = openStreamBubble(); }
+            streamBubble.append(event.content || "");
+          } else if (event.type === "delta_break") {
+            // The agent finished one AIMessage and is about to start
+            // another (typically: "checking…" filler before a tool call
+            // → tool runs → real reply). Close the current bubble and
+            // re-show the typing indicator until the next delta lands,
+            // so the patient sees the "still working" state during the
+            // tool execution gap.
+            if (streamBubble) { streamBubble.finalize(); streamBubble = null; }
+            showTyping();
+          } else if (event.type === "bubble") {
+            removeTyping();
+            if (streamBubble) { streamBubble.finalize(); streamBubble = null; }
+            addBubble("bot", event.content || "");
+          } else if (event.type === "final") {
+            finalDebug = event.debug || null;
+            finalQuickReplies = event.quick_replies || [];
+          } else if (event.type === "error") {
+            throw new Error(event.message || "stream error");
+          }
+        }
+      }
+      if (streamBubble) streamBubble.finalize();
+      removeTyping();
+      lastLatencyMs = performance.now() - t0;
+      renderQuickReplies(finalQuickReplies);
+      renderDebug(finalDebug, text);
+    } catch (err) {
+      removeTyping();
+      if (streamBubble) streamBubble.finalize();
+      showError(err.message);
+      lastLatencyMs = performance.now() - t0;
+      renderDebug({ flow: null, phase: null, phase_name: "ERROR",
+                    booking: {}, tool_trace: [], caller: null }, text);
+    } finally {
+      setLoading(false);
+      inputEl.focus();
+    }
+  }
+
+  async function resetChat() {
+    try {
+      await fetch(`${API}/reset`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: sessionId }),
+      });
+    } catch (_) {}
+    sessionId = crypto.randomUUID();
+    turnCounter = 0;
+    toolCounter = 0;
+    lastLatencyMs = null;
+    messagesEl.innerHTML = "";
+    setFlowBadge("menu", null);
+    setPhaseBadge(null, null);
+    setPhaseTracker("menu", null);
+    setCallerBadge(callerPhone ? { status: "anonymous", phone: callerPhone.replace(/\D/g, "") } : null);
+    bookingEl.className = "booking-strip booking-strip-empty hidden";
+    bookingEl.textContent = "Booking state empty.";
+    debugBodyEl.innerHTML = emptyDebugMarkup();
+    searchEl.value = "";
+    refreshStats();
+    if (callerPhone) await showWelcome();
+    inputEl.focus();
+  }
+
+  // ── Phone setup modal
+  const modalEl     = document.getElementById("phone-modal");
+  const modalInput  = document.getElementById("modal-phone-input");
+  const modalErr    = document.getElementById("modal-err");
+  const modalOk     = document.getElementById("modal-confirm");
+  const modalCancel = document.getElementById("modal-cancel");
+
+  function openPhoneModal() {
+    modalInput.value = callerPhone || "+39 ";
+    modalErr.textContent = "";
+    modalEl.classList.remove("hidden");
+    setTimeout(() => modalInput.focus(), 60);
+  }
+  function closePhoneModal() {
+    modalEl.classList.add("hidden");
+  }
+  modalCancel.addEventListener("click", () => {
+    if (callerPhone) closePhoneModal();
+    // first-time setup: allow proceeding anonymous
+    else { callerPhone = null; storePhone(null); closePhoneModal(); updateHeaderStatus(); setCallerBadge(null); }
+  });
+  modalInput.addEventListener("keydown", e => {
+    if (e.key === "Enter") { e.preventDefault(); modalOk.click(); }
+  });
+  modalOk.addEventListener("click", async () => {
+    const raw = modalInput.value.trim();
+    const digits = raw.replace(/\D/g, "");
+    if (digits.length < 8) {
+      modalErr.textContent = "Enter a valid number (at least 8 digits, prefix included).";
+      return;
+    }
+    const phoneChanged = callerPhone && raw !== callerPhone;
+    const firstTimeSetup = !callerPhone;
+    callerPhone = raw;
+    storePhone(callerPhone);
+    closePhoneModal();
+    updateHeaderStatus();
+    setCallerBadge({ status: "anonymous", phone: digits });
+    if (phoneChanged) {
+      // Mid-session phone change → wipe session and re-show the welcome.
+      await resetChat();
+    } else if (firstTimeSetup) {
+      // Just confirmed the first phone → show the canonical welcome bubbles.
+      await showWelcome();
+    }
+  });
+
+  // ── Welcome at session start ────────────────────────────────────────────
+  // Fetches the canonical welcome bubbles + quick-reply chips from the
+  // backend (/welcome) and renders them as the very first bot turn — no
+  // user message has been sent yet (WhatsApp-style first contact).
+  async function showWelcome() {
+    try {
+      const res = await fetch(`${API}/welcome`, { method: "GET" });
+      if (!res.ok) return;
+      const data = await res.json();
+      const replies = Array.isArray(data.replies) && data.replies.length
+        ? data.replies
+        : [data.reply].filter(Boolean);
+      replies.forEach(r => addBubble("bot", r));
+      renderQuickReplies(data.quick_replies);
+    } catch (_) { /* offline fallback: leave the empty-state */ }
+  }
+
+  // ── Boot
+  async function boot() {
+    callerPhone = loadStoredPhone();
+    updateHeaderStatus();
+    setCallerBadge(callerPhone ? { status: "anonymous", phone: callerPhone.replace(/\D/g, "") } : null);
+    refreshStats();
+    // Debug panel is open by default; the 🔧 button (or Ctrl+D) toggles it.
+    toggleDebug();
+    if (!callerPhone) {
+      openPhoneModal();
+    } else {
+      await showWelcome();
+    }
+    inputEl.focus();
+  }
+  boot();
+</script>
+</body>
+</html>
